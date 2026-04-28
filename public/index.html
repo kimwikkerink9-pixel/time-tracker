@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Time Tracker</title>
+</head>
+<body>
+
+  <h2>Time Tracker Login</h2>
+
+  <input id="email" placeholder="Email"><br>
+  <input id="password" type="password" placeholder="Wachtwoord"><br><br>
+
+  <button onclick="register()">Register</button>
+  <button onclick="login()">Login</button>
+
+  <hr>
+
+  <div id="app" style="display:none;">
+    <h2>Dashboard</h2>
+
+    <button onclick="inklokken()">Inklokken</button>
+    <button onclick="uitklokken()">Uitklokken</button>
+    <button onclick="loadData()">Refresh</button>
+    <button onclick="exportExcel()">Excel downloaden</button>
+
+    <pre id="output"></pre>
+  </div>
+
+<script>
+let token = null;
+
+function register() {
+  fetch("/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: email.value,
+      password: password.value
+    })
+  }).then(r => r.text()).then(alert);
+}
+
+function login() {
+  fetch("/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: email.value,
+      password: password.value
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    token = data.token;
+    document.getElementById("app").style.display = "block";
+  });
+}
+
+function authFetch(url, options = {}) {
+  options.headers = {
+    ...(options.headers || {}),
+    "Authorization": token,
+    "Content-Type": "application/json"
+  };
+  return fetch(url, options);
+}
+
+function inklokken() {
+  authFetch("/inklokken", { method: "POST" });
+}
+
+function uitklokken() {
+  authFetch("/uitklokken", { method: "POST" });
+}
+
+function loadData() {
+  authFetch("/data")
+    .then(r => r.json())
+    .then(data => {
+      output.textContent = JSON.stringify(data, null, 2);
+    });
+}
+
+function exportExcel() {
+  fetch("/export", {
+    method: "GET",
+    headers: {
+      "Authorization": token
+    }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Export mislukt");
+    return res.blob();
+  })
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "uren.xlsx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+}
+</script>
+
+</body>
+</html>
