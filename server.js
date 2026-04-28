@@ -114,8 +114,15 @@ app.post("/uitklokken", auth, async (req, res) => {
   res.send("Uitgeklokt");
 });
 
+const ADMIN_EMAIL = "kimwikkerink9@gmail.com";
+
 app.get("/data", auth, async (req, res) => {
   const data = await sheetsGet();
+
+  if (req.user === ADMIN_EMAIL) {
+    return res.json(data); // admin ziet alles
+  }
+
   res.json(data.filter(d => d.user === req.user));
 });
 
