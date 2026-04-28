@@ -66,6 +66,9 @@ function auth(req, res, next) {
 async function sheetsPost(data) {
   return fetch(SHEETS_API_URL, {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
     body: JSON.stringify(data)
   });
 }
