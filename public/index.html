@@ -5,26 +5,24 @@
 </head>
 <body>
 
-  <h2>Time Tracker Login</h2>
+<h2>Login</h2>
 
-  <input id="email" placeholder="Email"><br>
-  <input id="password" type="password" placeholder="Wachtwoord"><br><br>
+<input id="email" placeholder="Email"><br>
+<input id="password" type="password" placeholder="Wachtwoord"><br><br>
 
-  <button onclick="register()">Register</button>
-  <button onclick="login()">Login</button>
+<button onclick="register()">Register</button>
+<button onclick="login()">Login</button>
 
-  <hr>
+<hr>
 
-  <div id="app" style="display:none;">
-    <h2>Dashboard</h2>
+<div id="app" style="display:none;">
+  <button onclick="inklokken()">Inklokken</button>
+  <button onclick="uitklokken()">Uitklokken</button>
+  <button onclick="loadData()">Refresh</button>
+  <button onclick="exportExcel()">Excel</button>
 
-    <button onclick="inklokken()">Inklokken</button>
-    <button onclick="uitklokken()">Uitklokken</button>
-    <button onclick="loadData()">Refresh</button>
-    <button onclick="exportExcel()">Excel downloaden</button>
-
-    <pre id="output"></pre>
-  </div>
+  <pre id="output"></pre>
+</div>
 
 <script>
 let token = null;
@@ -32,7 +30,7 @@ let token = null;
 function register() {
   fetch("/register", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
       email: email.value,
       password: password.value
@@ -43,7 +41,7 @@ function register() {
 function login() {
   fetch("/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type":"application/json"},
     body: JSON.stringify({
       email: email.value,
       password: password.value
@@ -53,53 +51,43 @@ function login() {
   .then(data => {
     token = data.token;
     document.getElementById("app").style.display = "block";
+    loadData();
   });
 }
 
-function authFetch(url, options = {}) {
+function authFetch(url, options={}) {
   options.headers = {
     ...(options.headers || {}),
-    "Authorization": token,
-    "Content-Type": "application/json"
+    "Authorization": token
   };
   return fetch(url, options);
 }
 
 function inklokken() {
-  authFetch("/inklokken", { method: "POST" });
+  authFetch("/inklokken", {method:"POST"});
 }
 
 function uitklokken() {
-  authFetch("/uitklokken", { method: "POST" });
+  authFetch("/uitklokken", {method:"POST"});
 }
 
 function loadData() {
   authFetch("/data")
     .then(r => r.json())
-    .then(data => {
-      output.textContent = JSON.stringify(data, null, 2);
-    });
+    .then(d => output.textContent = JSON.stringify(d, null, 2));
 }
 
 function exportExcel() {
   fetch("/export", {
-    method: "GET",
-    headers: {
-      "Authorization": token
-    }
+    headers: { "Authorization": token }
   })
-  .then(res => {
-    if (!res.ok) throw new Error("Export mislukt");
-    return res.blob();
-  })
+  .then(res => res.blob())
   .then(blob => {
-    const url = window.URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "uren.xlsx";
-    document.body.appendChild(a);
     a.click();
-    a.remove();
   });
 }
 </script>

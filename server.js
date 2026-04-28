@@ -1,17 +1,16 @@
 const express = require("express");
-const fs = require("fs");
 const XLSX = require("xlsx");
 const path = require("path");
 const jwt = require("jsonwebtoken");
+const fs = require("fs");
 
 const app = express();
 app.use(express.json());
 app.use(express.static("public"));
 
-const DATA_FILE = "data.json";
 const USERS_FILE = "users.json";
-const SECRET = "supersecretkey"; // later veranderen voor veiligheid
-const PORT = process.env.PORT || 3000;
+const SECRET = "supersecretkey";
+const SHEETS_API_URL = process.env.SHEETS_API_URL;
 
 function load(file) {
   if (!fs.existsSync(file)) return [];
@@ -24,7 +23,6 @@ function save(file, data) {
 
 // ================= AUTH =================
 
-// REGISTER
 app.post("/register", (req, res) => {
   const { email, password } = req.body;
   let users = load(USERS_FILE);
@@ -39,7 +37,6 @@ app.post("/register", (req, res) => {
   res.send("Account aangemaakt");
 });
 
-// LOGIN
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
   let users = load(USERS_FILE);
@@ -51,7 +48,6 @@ app.post("/login", (req, res) => {
   res.json({ token });
 });
 
-// AUTH MIDDLEWARE
 function auth(req, res, next) {
   const token = req.headers["authorization"];
   if (!token) return res.sendStatus(403);
@@ -65,55 +61,73 @@ function auth(req, res, next) {
   }
 }
 
-// ================= TIME TRACKING =================
+// ================= GOOGLE SHEETS =================
 
-// INKLOKKEN
-app.post("/inklokken", auth, (req, res) => {
-  let data = load(DATA_FILE);
+async function sheetsPost(data) {
+  return fetch(SHEETS_API_URL, {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
 
-  data.push({
+async function sheetsGet() {
+  const res = await fetch(SHEETS_API_URL);
+  return res.json();
+}
+
+// ================= TIME =================
+
+app.post("/inklokken", auth, async (req, res) => {
+  await sheetsPost({
+    action: "clockIn",
     user: req.user,
-    start: new Date(),
-    end: null,
-    hours: 0
+    start: new Date().toISOString()
   });
 
-  save(DATA_FILE, data);
   res.send("Ingeklokt");
 });
 
-// UITKLOKKEN
-app.post("/uitklokken", auth, (req, res) => {
-  let data = load(DATA_FILE);
+app.post("/uitklokken", auth, async (req, res) => {
+  const data = await sheetsGet();
 
-  const entry = data.find(e => e.user === req.user && !e.end);
-  if (!entry) return res.send("Geen actieve sessie");
+  const last = [...data].reverse().find(d => d.user === req.user && !d.end);
 
-  entry.end = new Date();
+  if (!last) return res.send("Geen actieve sessie");
 
-  let uren = (new Date(entry.end) - new Date(entry.start)) / (1000 * 60 * 60);
+  const end = new Date();
+  let uren = (end - new Date(last.start)) / (1000 * 60 * 60);
 
-  if (uren > 6) uren -= 0.5; // pauze
+  if (uren > 6) uren -= 0.5;
 
-  entry.hours = Math.round(uren * 100) / 100;
+  uren = Math.round(uren * 100) / 100;
 
-  save(DATA_FILE, data);
+  await sheetsPost({
+    action: "clockOut",
+    user: req.user,
+    end: end.toISOString(),
+    hours: uren
+  });
+
   res.send("Uitgeklokt");
 });
 
-// DATA OPHALEN
-app.get("/export", auth, (req, res) => {
-  let data = load(DATA_FILE);
+app.get("/data", auth, async (req, res) => {
+  const data = await sheetsGet();
   res.json(data.filter(d => d.user === req.user));
 });
 
-// EXPORT EXCEL
-app.get("/export", auth, (req, res) => {
-  let data = load(DATA_FILE).filter(d => d.user === req.user);
+app.get("/export", auth, async (req, res) => {
+  const data = await sheetsGet();
+  const userData = data.filter(d => d.user === req.user);
 
-  const ws = XLSX.utils.json_to_sheet(data);
+  const ws = XLSX.utils.json_to_sheet(userData.length ? userData : [{
+    user: req.user,
+    start: "",
+    end: "",
+    hours: ""
+  }]);
+
   const wb = XLSX.utils.book_new();
-
   XLSX.utils.book_append_sheet(wb, ws, "Uren");
 
   const filePath = path.join(__dirname, "uren.xlsx");
@@ -122,10 +136,7 @@ app.get("/export", auth, (req, res) => {
   res.download(filePath);
 });
 
-app.listen(3000, () => {
-  console.log("Server draait op http://localhost:3000");
-});
-
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server draait op port " + PORT);
 });
